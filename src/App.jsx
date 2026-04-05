@@ -127,6 +127,14 @@ function getTimeline(request) {
   }));
 }
 
+function StatusBadge({ value }) {
+  return (
+    <span style={{ ...styles.badge, ...(badgeStyles[value] || { background: "#E5E7EB", color: "#111827" }) }}>
+      {value}
+    </span>
+  );
+}
+
 function Info({ label, value }) {
   return (
     <div style={styles.infoBox}>
@@ -159,7 +167,6 @@ function LoginScreen() {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (err) {
       setError("Login non riuscito: " + err.code);
-      console.error(err);
     } finally {
       setBusy(false);
     }
@@ -199,6 +206,30 @@ function LoginScreen() {
   );
 }
 
+function TabButton({ label, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        ...styles.tabButton,
+        background: active ? "white" : "#E2E8F0",
+        color: active ? "#111827" : "#475569",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function KpiCard({ label, value }) {
+  return (
+    <div style={styles.kpiCard}>
+      <div style={styles.kpiLabel}>{label}</div>
+      <div style={styles.kpiValue}>{value}</div>
+    </div>
+  );
+}
+
 function WorkflowApp({ user }) {
   const [requests, setRequests] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -208,6 +239,7 @@ function WorkflowApp({ user }) {
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(true);
   const [saveMessage, setSaveMessage] = useState("");
+  const [activeTab, setActiveTab] = useState("workflow");
   const [form, setForm] = useState({
     cliente: "",
     tipoCliente: "Persona giuridica",
@@ -238,6 +270,7 @@ function WorkflowApp({ user }) {
         }
       }
     };
+
     seedIfEmpty();
   }, []);
 
@@ -246,9 +279,12 @@ function WorkflowApp({ user }) {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const rows = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
       setRequests(rows);
-      if (!selectedId && rows[0]) setSelectedId(rows[0].id);
+      if (!selectedId && rows[0]) {
+        setSelectedId(rows[0].id);
+      }
       setLoading(false);
     });
+
     return () => unsubscribe();
   }, [selectedId]);
 
@@ -262,6 +298,7 @@ function WorkflowApp({ user }) {
         (r.prodotto || "").toLowerCase().includes(q) ||
         (r.specialista || "").toLowerCase().includes(q) ||
         (r.stato || "").toLowerCase().includes(q);
+
       const matchesStatus = statusFilter === "Tutti" ? true : r.stato === statusFilter;
       return matchesText && matchesStatus;
     });
@@ -281,11 +318,13 @@ function WorkflowApp({ user }) {
   async function updateWorkflow(request, patch, auditEntry) {
     const ref = doc(db, "richieste", request.id);
     const nextAudit = [...(request.audit || []), auditEntry];
+
     await updateDoc(ref, {
       ...patch,
       audit: nextAudit,
       updatedAt: serverTimestamp(),
     });
+
     setComment("");
   }
 
@@ -319,7 +358,9 @@ function WorkflowApp({ user }) {
     };
 
     await addDoc(collection(db, "richieste"), payload);
+
     setSaveMessage("Richiesta salvata correttamente");
+    setActiveTab("workflow");
     setForm({
       cliente: "",
       tipoCliente: "Persona giuridica",
@@ -343,338 +384,458 @@ function WorkflowApp({ user }) {
     setTimeout(() => setSaveMessage(""), 2500);
   }
 
-  const kpiCards = [
-    ["Pratiche totali", stats.totali],
-    ["In valutazione", stats.inValutazione],
-    ["Da integrare", stats.daIntegrare],
-    ["Approvate", stats.approvate],
-    ["Quotazioni", stats.quotazioni],
-    ["Ordini fermi", stats.ordineFermo],
-    ["Pagate", stats.pagate],
-    ["Emesse", stats.emesse],
-  ];
-
   return (
     <div style={styles.page}>
       <div style={styles.container}>
         <div style={styles.header}>
           <div>
-            <div style={styles.eyebrow}>MVP WEBAPP · VERSIONE COMPLETA + FIREBASE</div>
+            <div style={styles.eyebrow}>MVP WEBAPP · VERSIONE CON MENU ORIZZONTALE</div>
             <h1 style={styles.title}>Gestione richieste emissione polizze broker</h1>
-            <p style={styles.subtitle}>Workflow completo con dati reali salvati su Firestore.</p>
+            <p style={styles.subtitle}>Login e database invariati, menu riorganizzato in schede orizzontali.</p>
           </div>
 
           <div style={styles.roleBox}>
             <div style={styles.label}>Utente</div>
-            <div style={{ fontWeight: 600, marginBottom: 10 }}>{user.email}</div>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>{user.email}</div>
             <div style={styles.label}>Profilo attivo</div>
             <select value={role} onChange={(e) => setRole(e.target.value)} style={styles.select}>
               {roles.map((r) => (
                 <option key={r}>{r}</option>
               ))}
             </select>
-            <button
-              style={{ ...styles.secondaryButton, width: "100%", marginTop: 12 }}
-              onClick={() => signOut(auth)}
-            >
+            <button style={{ ...styles.secondaryButton, width: "100%", marginTop: 12 }} onClick={() => signOut(auth)}>
               Logout
             </button>
           </div>
         </div>
 
         <div style={styles.kpiGrid}>
-          {kpiCards.map(([label, value]) => (
-            <div key={label} style={styles.kpiCard}>
-              <div style={styles.kpiLabel}>{label}</div>
-              <div style={styles.kpiValue}>{value}</div>
-            </div>
-          ))}
+          <KpiCard label="Pratiche totali" value={stats.totali} />
+          <KpiCard label="In valutazione" value={stats.inValutazione} />
+          <KpiCard label="Da integrare" value={stats.daIntegrare} />
+          <KpiCard label="Approvate" value={stats.approvate} />
+          <KpiCard label="Quotazioni" value={stats.quotazioni} />
+          <KpiCard label="Ordini fermi" value={stats.ordineFermo} />
+          <KpiCard label="Pagate" value={stats.pagate} />
+          <KpiCard label="Emesse" value={stats.emesse} />
         </div>
 
-        <div style={styles.mainGrid}>
-          <div style={styles.sidebar}>
-            <div style={styles.cardTitle}>Richieste</div>
-            <input
-              style={styles.input}
-              placeholder="Cerca..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <select style={styles.select} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option>Tutti</option>
-              {states.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
-            </select>
+        <div style={styles.tabsBar}>
+          <TabButton label="Workflow operativo" active={activeTab === "workflow"} onClick={() => setActiveTab("workflow")} />
+          <TabButton label="Nuova richiesta" active={activeTab === "nuova"} onClick={() => setActiveTab("nuova")} />
+          <TabButton label="Workflow completo" active={activeTab === "completo"} onClick={() => setActiveTab("completo")} />
+          <TabButton label="Report" active={activeTab === "report"} onClick={() => setActiveTab("report")} />
+          <TabButton label="Regole MVP" active={activeTab === "regole"} onClick={() => setActiveTab("regole")} />
+        </div>
 
-            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-              {loading ? (
-                <div>Caricamento...</div>
-              ) : (
-                filtered.map((r) => (
-                  <button
-                    key={r.id}
-                    onClick={() => setSelectedId(r.id)}
-                    style={{
-                      ...styles.requestItem,
-                      borderColor: selectedId === r.id ? "#111827" : "#E5E7EB",
-                      background: selectedId === r.id ? "#F8FAFC" : "white",
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                      <div>
-                        <div style={{ fontWeight: 600 }}>{r.cliente}</div>
-                        <div style={styles.mutedSmall}>{r.prodotto}</div>
+        {activeTab === "workflow" && (
+          <div style={styles.mainGrid}>
+            <div style={styles.sidebar}>
+              <div style={styles.cardTitle}>Richieste</div>
+              <input
+                style={styles.input}
+                placeholder="Cerca..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <select style={styles.select} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                <option>Tutti</option>
+                {states.map((s) => (
+                  <option key={s}>{s}</option>
+                ))}
+              </select>
+
+              <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+                {loading ? (
+                  <div>Caricamento...</div>
+                ) : (
+                  filtered.map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => setSelectedId(r.id)}
+                      style={{
+                        ...styles.requestItem,
+                        borderColor: selectedId === r.id ? "#111827" : "#E5E7EB",
+                        background: selectedId === r.id ? "#F8FAFC" : "white",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{r.cliente}</div>
+                          <div style={styles.mutedSmall}>{r.prodotto}</div>
+                        </div>
+                        <StatusBadge value={r.stato} />
                       </div>
-                      <span style={{ ...styles.badge, ...(badgeStyles[r.stato] || {}) }}>{r.stato}</span>
-                    </div>
-                    <div style={{ ...styles.mutedSmall, marginTop: 8 }}>
-                      {r.specialista} · {r.broker}
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div style={styles.detailArea}>
-            <div style={styles.card}>
-              <div style={styles.cardTitle}>Nuova richiesta</div>
-
-              <div style={styles.formGrid}>
-                <input style={styles.input} placeholder="Cliente" value={form.cliente} onChange={(e) => setForm({ ...form, cliente: e.target.value })} />
-                <input style={styles.input} placeholder="Firmatario" value={form.firmatario} onChange={(e) => setForm({ ...form, firmatario: e.target.value })} />
-                <input style={styles.input} placeholder="P.IVA / CF" value={form.partitaIva} onChange={(e) => setForm({ ...form, partitaIva: e.target.value })} />
-                <input style={styles.input} placeholder="Specialista" value={form.specialista} onChange={(e) => setForm({ ...form, specialista: e.target.value })} />
-                <input style={styles.input} placeholder="Area commerciale" value={form.areaCommerciale} onChange={(e) => setForm({ ...form, areaCommerciale: e.target.value })} />
-                <input style={styles.input} placeholder="Premio stimato" value={form.premioStimato} onChange={(e) => setForm({ ...form, premioStimato: e.target.value })} />
-
-                <select style={styles.select} value={form.tipoCliente} onChange={(e) => setForm({ ...form, tipoCliente: e.target.value })}>
-                  <option>Persona giuridica</option>
-                  <option>Persona fisica</option>
-                </select>
-
-                <select style={styles.select} value={form.prodotto} onChange={(e) => setForm({ ...form, prodotto: e.target.value })}>
-                  <option>Polizza Danni Azienda</option>
-                  <option>Polizza Danni Commerciale</option>
-                  <option>Polizza Professionale</option>
-                  <option>Polizza Fabbricati</option>
-                  <option>Polizza Casa</option>
-                </select>
-
-                <select style={styles.select} value={form.broker} onChange={(e) => setForm({ ...form, broker: e.target.value })}>
-                  <option>Broker Delta</option>
-                  <option>Broker Sigma</option>
-                  <option>Broker Omega</option>
-                </select>
-
-                <select style={styles.select} value={form.canaleInvio} onChange={(e) => setForm({ ...form, canaleInvio: e.target.value })}>
-                  <option>Digital Form</option>
-                  <option>Email</option>
-                  <option>PDF compilabile</option>
-                </select>
-
-                <label style={styles.checkboxRow}>
-                  <input type="checkbox" checked={form.privacyBMed} onChange={(e) => setForm({ ...form, privacyBMed: e.target.checked })} />
-                  Privacy BMed acquisita
-                </label>
-
-                <label style={styles.checkboxRow}>
-                  <input type="checkbox" checked={form.poteriFirmaVerificati} onChange={(e) => setForm({ ...form, poteriFirmaVerificati: e.target.checked })} />
-                  Poteri di firma verificati
-                </label>
-              </div>
-
-              <textarea style={styles.textarea} placeholder="Bisogni del cliente / coperture richieste" value={form.needs} onChange={(e) => setForm({ ...form, needs: e.target.value })} />
-              <textarea style={styles.textarea} placeholder="Note operative" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
-
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                <button style={styles.primaryButton} onClick={createRequest}>Salva richiesta</button>
-                {saveMessage ? <span style={{ color: "#166534", fontWeight: 600 }}>{saveMessage}</span> : null}
+                      <div style={{ ...styles.mutedSmall, marginTop: 8 }}>
+                        {r.specialista} · {r.broker}
+                      </div>
+                    </button>
+                  ))
+                )}
               </div>
             </div>
 
-            <div style={styles.card}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-                <div style={styles.cardTitle}>Dettaglio pratica</div>
-                {selected ? <span style={{ ...styles.badge, ...(badgeStyles[selected.stato] || {}) }}>{selected.stato}</span> : null}
-              </div>
+            <div style={styles.detailArea}>
+              <div style={styles.card}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+                  <div style={styles.cardTitle}>Dettaglio pratica</div>
+                  {selected ? <StatusBadge value={selected.stato} /> : null}
+                </div>
 
-              {!selected ? (
-                <div style={styles.mutedText}>Seleziona una pratica a sinistra.</div>
-              ) : (
-                <>
-                  <div style={styles.detailGrid}>
-                    <Info label="Cliente" value={selected.cliente} />
-                    <Info label="Prodotto" value={selected.prodotto} />
-                    <Info label="Specialista" value={selected.specialista} />
-                    <Info label="Broker" value={selected.broker} />
-                    <Info label="Firmatario" value={selected.firmatario} />
-                    <Info label="P.IVA / CF" value={selected.partitaIva} />
-                    <Info label="Premio stimato" value={selected.premioStimato || "—"} />
-                    <Info label="Fase" value={selected.fase || "—"} />
-                  </div>
+                {!selected ? (
+                  <div style={styles.mutedText}>Seleziona una pratica a sinistra.</div>
+                ) : (
+                  <>
+                    <div style={styles.detailGrid}>
+                      <Info label="Cliente" value={selected.cliente} />
+                      <Info label="Prodotto" value={selected.prodotto} />
+                      <Info label="Specialista" value={selected.specialista} />
+                      <Info label="Broker" value={selected.broker} />
+                      <Info label="Firmatario" value={selected.firmatario} />
+                      <Info label="P.IVA / CF" value={selected.partitaIva} />
+                      <Info label="Premio stimato" value={selected.premioStimato || "—"} />
+                      <Info label="Fase" value={selected.fase || "—"} />
+                    </div>
 
-                  <Section title="Bisogni del cliente">{selected.needs || "—"}</Section>
-                  <Section title="Note operative">{selected.note || "—"}</Section>
+                    <Section title="Bisogni del cliente">{selected.needs || "—"}</Section>
+                    <Section title="Note operative">{selected.note || "—"}</Section>
 
-                  <Section title="Workflow">
-                    <div style={styles.timeline}>
-                      {getTimeline(selected).map((item) => (
-                        <div key={item.step} style={styles.timelineItem}>
-                          <span
-                            style={{
-                              ...styles.timelineDot,
-                              background:
-                                item.status === "done" ? "#22C55E" : item.status === "current" ? "#F59E0B" : "#CBD5E1",
-                            }}
-                          />
-                          <div>
-                            <div style={{ fontWeight: 600 }}>{item.step}</div>
-                            <div style={styles.mutedSmall}>
-                              {item.status === "done" ? "Completato" : item.status === "current" ? "Fase attuale" : "Da eseguire"}
+                    <Section title="Workflow">
+                      <div style={styles.timeline}>
+                        {getTimeline(selected).map((item) => (
+                          <div key={item.step} style={styles.timelineItem}>
+                            <span
+                              style={{
+                                ...styles.timelineDot,
+                                background:
+                                  item.status === "done"
+                                    ? "#22C55E"
+                                    : item.status === "current"
+                                    ? "#F59E0B"
+                                    : "#CBD5E1",
+                              }}
+                            />
+                            <div>
+                              <div style={{ fontWeight: 600 }}>{item.step}</div>
+                              <div style={styles.mutedSmall}>
+                                {item.status === "done"
+                                  ? "Completato"
+                                  : item.status === "current"
+                                  ? "Fase attuale"
+                                  : "Da eseguire"}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  </Section>
+                        ))}
+                      </div>
+                    </Section>
 
-                  <Section title="Audit trail">
-                    <div style={{ display: "grid", gap: 8 }}>
-                      {(selected.audit || []).slice().reverse().map((a, i) => (
-                        <div key={i} style={styles.auditRow}>
-                          <div style={{ fontWeight: 600 }}>{a.azione}</div>
-                          <div style={styles.mutedSmall}>{a.data} · {a.utente}</div>
-                          <div>{a.dettaglio}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </Section>
+                    <Section title="Audit trail">
+                      <div style={{ display: "grid", gap: 8 }}>
+                        {(selected.audit || [])
+                          .slice()
+                          .reverse()
+                          .map((a, i) => (
+                            <div key={i} style={styles.auditRow}>
+                              <div style={{ fontWeight: 600 }}>{a.azione}</div>
+                              <div style={styles.mutedSmall}>
+                                {a.data} · {a.utente}
+                              </div>
+                              <div>{a.dettaglio}</div>
+                            </div>
+                          ))}
+                      </div>
+                    </Section>
 
-                  <textarea style={styles.textarea} placeholder="Commento operativo / motivazione..." value={comment} onChange={(e) => setComment(e.target.value)} />
+                    <textarea
+                      style={styles.textarea}
+                      placeholder="Commento operativo / motivazione..."
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                    />
 
-                  <div style={styles.actionBar}>
-                    {(role === "Valutatore" || role === "Bancassurance") && selected.stato === "In valutazione" && (
-                      <>
+                    <div style={styles.actionBar}>
+                      {(role === "Valutatore" || role === "Bancassurance") && selected.stato === "In valutazione" && (
+                        <>
+                          <button
+                            style={styles.primaryButton}
+                            onClick={() =>
+                              updateWorkflow(
+                                selected,
+                                { stato: "Approvata", fase: "Pronta per invio a Broker", esito: "OK", motivoEsito: comment || "Pratica approvata" },
+                                { data: new Date().toLocaleString("it-IT"), utente: role, azione: "Approvata", dettaglio: comment || "Pratica approvata" }
+                              )
+                            }
+                          >
+                            Approva
+                          </button>
+
+                          <button
+                            style={styles.secondaryButton}
+                            onClick={() =>
+                              updateWorkflow(
+                                selected,
+                                { stato: "Da integrare", fase: "Attesa integrazione Specialista", esito: "Integrazione richiesta", motivoEsito: comment || "Dati mancanti" },
+                                { data: new Date().toLocaleString("it-IT"), utente: role, azione: "Richiesta integrazione", dettaglio: comment || "Dati mancanti" }
+                              )
+                            }
+                          >
+                            Richiedi integrazione
+                          </button>
+
+                          <button
+                            style={styles.dangerButton}
+                            onClick={() =>
+                              updateWorkflow(
+                                selected,
+                                { stato: "Rifiutata", fase: "Chiusa", esito: "KO", motivoEsito: comment || "Pratica rifiutata" },
+                                { data: new Date().toLocaleString("it-IT"), utente: role, azione: "Rifiutata", dettaglio: comment || "Pratica rifiutata" }
+                              )
+                            }
+                          >
+                            Rifiuta
+                          </button>
+                        </>
+                      )}
+
+                      {(role === "Bancassurance" || role === "Amministratore") && selected.stato === "Approvata" && (
+                        <>
+                          <button
+                            style={styles.secondaryButton}
+                            onClick={() =>
+                              updateWorkflow(
+                                selected,
+                                { fase: "Richiesta inviata al Broker" },
+                                { data: new Date().toLocaleString("it-IT"), utente: role, azione: "Invio al Broker", dettaglio: comment || "Richiesta trasmessa al broker" }
+                              )
+                            }
+                          >
+                            Invia al Broker
+                          </button>
+
+                          <button
+                            style={styles.secondaryButton}
+                            onClick={() =>
+                              updateWorkflow(
+                                selected,
+                                { stato: "Quotazione ricevuta", fase: "Attesa accettazione preventivo", privacyBroker: true, quotazioneRicevuta: true },
+                                { data: new Date().toLocaleString("it-IT"), utente: selected.broker, azione: "Quotazione ricevuta", dettaglio: comment || "Quotazione registrata" }
+                              )
+                            }
+                          >
+                            Registra quotazione
+                          </button>
+                        </>
+                      )}
+
+                      {(role === "Bancassurance" || role === "Amministratore") && selected.stato === "Quotazione ricevuta" && (
                         <button
                           style={styles.primaryButton}
                           onClick={() =>
                             updateWorkflow(
                               selected,
-                              { stato: "Approvata", fase: "Pronta per invio a Broker", esito: "OK", motivoEsito: comment || "Pratica approvata" },
-                              { data: new Date().toLocaleString("it-IT"), utente: role, azione: "Approvata", dettaglio: comment || "Pratica approvata" }
+                              { stato: "Ordine fermo", fase: "Attesa pagamento Broker", dnFirmato: true, esito: "Ordine fermo acquisito", motivoEsito: comment || "Cliente ha accettato il preventivo" },
+                              { data: new Date().toLocaleString("it-IT"), utente: selected.specialista, azione: "Ordine fermo", dettaglio: comment || "Cliente ha accettato il preventivo" }
                             )
                           }
                         >
-                          Approva
+                          Conferma ordine fermo
                         </button>
+                      )}
+
+                      {(role === "Operations" || role === "Amministratore") && selected.stato === "Ordine fermo" && (
                         <button
                           style={styles.secondaryButton}
                           onClick={() =>
                             updateWorkflow(
                               selected,
-                              { stato: "Da integrare", fase: "Attesa integrazione Specialista", esito: "Integrazione richiesta", motivoEsito: comment || "Dati mancanti" },
-                              { data: new Date().toLocaleString("it-IT"), utente: role, azione: "Richiesta integrazione", dettaglio: comment || "Dati mancanti" }
+                              { stato: "Pagata", fase: "Attesa emissione polizza", pagamentoRicevuto: true },
+                              { data: new Date().toLocaleString("it-IT"), utente: selected.broker, azione: "Pagamento confermato", dettaglio: comment || "Bonifico ricevuto" }
                             )
                           }
                         >
-                          Richiedi integrazione
+                          Registra pagamento
                         </button>
+                      )}
+
+                      {(role === "Operations" || role === "Amministratore") && selected.stato === "Pagata" && (
                         <button
-                          style={styles.dangerButton}
+                          style={styles.primaryButton}
                           onClick={() =>
                             updateWorkflow(
                               selected,
-                              { stato: "Rifiutata", fase: "Chiusa", esito: "KO", motivoEsito: comment || "Pratica rifiutata" },
-                              { data: new Date().toLocaleString("it-IT"), utente: role, azione: "Rifiutata", dettaglio: comment || "Pratica rifiutata" }
+                              { stato: "Emessa", fase: "Archiviazione finale", polizzaEmessa: true, pritGenerato: true, archiviata: true, esito: "Emissione completata", motivoEsito: comment || "Polizza emessa e archiviata" },
+                              { data: new Date().toLocaleString("it-IT"), utente: role, azione: "Polizza emessa", dettaglio: comment || "Polizza emessa e archiviata" }
                             )
                           }
                         >
-                          Rifiuta
+                          Emetti polizza
                         </button>
-                      </>
-                    )}
-
-                    {(role === "Bancassurance" || role === "Amministratore") && selected.stato === "Approvata" && (
-                      <>
-                        <button
-                          style={styles.secondaryButton}
-                          onClick={() =>
-                            updateWorkflow(
-                              selected,
-                              { fase: "Richiesta inviata al Broker" },
-                              { data: new Date().toLocaleString("it-IT"), utente: role, azione: "Invio al Broker", dettaglio: comment || "Richiesta trasmessa al broker" }
-                            )
-                          }
-                        >
-                          Invia al Broker
-                        </button>
-                        <button
-                          style={styles.secondaryButton}
-                          onClick={() =>
-                            updateWorkflow(
-                              selected,
-                              { stato: "Quotazione ricevuta", fase: "Attesa accettazione preventivo", privacyBroker: true, quotazioneRicevuta: true },
-                              { data: new Date().toLocaleString("it-IT"), utente: selected.broker, azione: "Quotazione ricevuta", dettaglio: comment || "Quotazione registrata" }
-                            )
-                          }
-                        >
-                          Registra quotazione
-                        </button>
-                      </>
-                    )}
-
-                    {(role === "Bancassurance" || role === "Amministratore") && selected.stato === "Quotazione ricevuta" && (
-                      <button
-                        style={styles.primaryButton}
-                        onClick={() =>
-                          updateWorkflow(
-                            selected,
-                            { stato: "Ordine fermo", fase: "Attesa pagamento Broker", dnFirmato: true, esito: "Ordine fermo acquisito", motivoEsito: comment || "Cliente ha accettato il preventivo" },
-                            { data: new Date().toLocaleString("it-IT"), utente: selected.specialista, azione: "Ordine fermo", dettaglio: comment || "Cliente ha accettato il preventivo" }
-                          )
-                        }
-                      >
-                        Conferma ordine fermo
-                      </button>
-                    )}
-
-                    {(role === "Operations" || role === "Amministratore") && selected.stato === "Ordine fermo" && (
-                      <button
-                        style={styles.secondaryButton}
-                        onClick={() =>
-                          updateWorkflow(
-                            selected,
-                            { stato: "Pagata", fase: "Attesa emissione polizza", pagamentoRicevuto: true },
-                            { data: new Date().toLocaleString("it-IT"), utente: selected.broker, azione: "Pagamento confermato", dettaglio: comment || "Bonifico ricevuto" }
-                          )
-                        }
-                      >
-                        Registra pagamento
-                      </button>
-                    )}
-
-                    {(role === "Operations" || role === "Amministratore") && selected.stato === "Pagata" && (
-                      <button
-                        style={styles.primaryButton}
-                        onClick={() =>
-                          updateWorkflow(
-                            selected,
-                            { stato: "Emessa", fase: "Archiviazione finale", polizzaEmessa: true, pritGenerato: true, archiviata: true, esito: "Emissione completata", motivoEsito: comment || "Polizza emessa e archiviata" },
-                            { data: new Date().toLocaleString("it-IT"), utente: role, azione: "Polizza emessa", dettaglio: comment || "Polizza emessa e archiviata" }
-                          )
-                        }
-                      >
-                        Emetti polizza
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {activeTab === "nuova" && (
+          <div style={styles.card}>
+            <div style={styles.cardTitle}>Nuova richiesta</div>
+            <div style={styles.formGrid}>
+              <input style={styles.input} placeholder="Cliente" value={form.cliente} onChange={(e) => setForm({ ...form, cliente: e.target.value })} />
+              <input style={styles.input} placeholder="Firmatario" value={form.firmatario} onChange={(e) => setForm({ ...form, firmatario: e.target.value })} />
+              <input style={styles.input} placeholder="P.IVA / CF" value={form.partitaIva} onChange={(e) => setForm({ ...form, partitaIva: e.target.value })} />
+              <input style={styles.input} placeholder="Specialista" value={form.specialista} onChange={(e) => setForm({ ...form, specialista: e.target.value })} />
+              <input style={styles.input} placeholder="Area commerciale" value={form.areaCommerciale} onChange={(e) => setForm({ ...form, areaCommerciale: e.target.value })} />
+              <input style={styles.input} placeholder="Premio stimato" value={form.premioStimato} onChange={(e) => setForm({ ...form, premioStimato: e.target.value })} />
+
+              <select style={styles.select} value={form.tipoCliente} onChange={(e) => setForm({ ...form, tipoCliente: e.target.value })}>
+                <option>Persona giuridica</option>
+                <option>Persona fisica</option>
+              </select>
+
+              <select style={styles.select} value={form.prodotto} onChange={(e) => setForm({ ...form, prodotto: e.target.value })}>
+                <option>Polizza Danni Azienda</option>
+                <option>Polizza Danni Commerciale</option>
+                <option>Polizza Professionale</option>
+                <option>Polizza Fabbricati</option>
+                <option>Polizza Casa</option>
+              </select>
+
+              <select style={styles.select} value={form.broker} onChange={(e) => setForm({ ...form, broker: e.target.value })}>
+                <option>Broker Delta</option>
+                <option>Broker Sigma</option>
+                <option>Broker Omega</option>
+              </select>
+
+              <select style={styles.select} value={form.canaleInvio} onChange={(e) => setForm({ ...form, canaleInvio: e.target.value })}>
+                <option>Digital Form</option>
+                <option>Email</option>
+                <option>PDF compilabile</option>
+              </select>
+
+              <label style={styles.checkboxRow}>
+                <input type="checkbox" checked={form.privacyBMed} onChange={(e) => setForm({ ...form, privacyBMed: e.target.checked })} />
+                Privacy BMed acquisita
+              </label>
+
+              <label style={styles.checkboxRow}>
+                <input type="checkbox" checked={form.poteriFirmaVerificati} onChange={(e) => setForm({ ...form, poteriFirmaVerificati: e.target.checked })} />
+                Poteri di firma verificati
+              </label>
+            </div>
+
+            <textarea style={styles.textarea} placeholder="Bisogni del cliente / coperture richieste" value={form.needs} onChange={(e) => setForm({ ...form, needs: e.target.value })} />
+            <textarea style={styles.textarea} placeholder="Note operative" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <button style={styles.primaryButton} onClick={createRequest}>Salva richiesta</button>
+              {saveMessage ? <span style={{ color: "#166534", fontWeight: 600 }}>{saveMessage}</span> : null}
+            </div>
+          </div>
+        )}
+
+        {activeTab === "completo" && (
+          <div style={styles.twoColGrid}>
+            <div style={styles.card}>
+              <div style={styles.cardTitle}>Workflow completo</div>
+              <div style={styles.pipelineGrid}>
+                {["Richiesta", "Valutazione", "Broker", "Quotazione", "Ordine fermo", "Pagamento", "Emissione", "Archiviazione"].map((step, idx) => (
+                  <div key={step} style={styles.pipelineCard}>
+                    <div style={styles.mutedSmall}>Fase {idx + 1}</div>
+                    <div style={{ fontWeight: 700, marginTop: 6 }}>{step}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={styles.card}>
+              <div style={styles.cardTitle}>Matrice ruoli</div>
+              <div style={{ display: "grid", gap: 12 }}>
+                <div><strong>Specialista</strong>: inserisce richieste e segue la pratica.</div>
+                <div><strong>Valutatore</strong>: approva / rifiuta / richiede integrazione.</div>
+                <div><strong>Bancassurance</strong>: invio broker, quotazione, ordine fermo.</div>
+                <div><strong>Operations</strong>: pagamento, emissione, PRIT, archiviazione.</div>
+                <div><strong>Amministratore</strong>: supervisione completa.</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "report" && (
+          <div style={styles.twoColGrid}>
+            <div style={styles.card}>
+              <div style={styles.cardTitle}>Vista management pratiche</div>
+              <div style={{ overflowX: "auto" }}>
+                <table style={styles.table}>
+                  <thead>
+                    <tr>
+                      <th style={styles.th}>Cliente</th>
+                      <th style={styles.th}>Specialista</th>
+                      <th style={styles.th}>Broker</th>
+                      <th style={styles.th}>Stato</th>
+                      <th style={styles.th}>Fase</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {requests.map((r) => (
+                      <tr key={r.id}>
+                        <td style={styles.td}>{r.cliente}</td>
+                        <td style={styles.td}>{r.specialista}</td>
+                        <td style={styles.td}>{r.broker}</td>
+                        <td style={styles.td}><StatusBadge value={r.stato} /></td>
+                        <td style={styles.td}>{r.fase}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div style={styles.card}>
+              <div style={styles.cardTitle}>KPI workflow</div>
+              <div style={{ display: "grid", gap: 12 }}>
+                <div style={styles.kpiMini}>
+                  <div style={styles.kpiLabel}>Tasso pratiche concluse</div>
+                  <div style={styles.kpiValueSmall}>{stats.totali ? Math.round((stats.emesse / stats.totali) * 100) : 0}%</div>
+                </div>
+                <div style={styles.kpiMini}>
+                  <div style={styles.kpiLabel}>Pratiche bloccate</div>
+                  <div style={styles.kpiValueSmall}>{stats.daIntegrare + stats.ordineFermo}</div>
+                </div>
+                <div style={styles.kpiMini}>
+                  <div style={styles.kpiLabel}>Backlog operativo</div>
+                  <div style={styles.kpiValueSmall}>{stats.inValutazione + stats.approvate + stats.quotazioni + stats.pagate}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "regole" && (
+          <div style={styles.twoColGrid}>
+            <div style={styles.card}>
+              <div style={styles.cardTitle}>Regole MVP</div>
+              <div style={{ display: "grid", gap: 12 }}>
+                <div>Accesso consentito solo a utenti autenticati Firebase.</div>
+                <div>Database Firestore già collegato.</div>
+                <div>Workflow tracciato con audit trail sulla pratica.</div>
+                <div>Menu organizzato in tab orizzontali per una navigazione più chiara.</div>
+              </div>
+            </div>
+
+            <div style={styles.card}>
+              <div style={styles.cardTitle}>Utente corrente</div>
+              <div style={{ display: "grid", gap: 10 }}>
+                <div><strong>Email:</strong> {user.email}</div>
+                <div><strong>Ruolo selezionato:</strong> {role}</div>
+                <div><strong>Stato app:</strong> online con login e database</div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -750,11 +911,31 @@ const styles = {
     fontSize: 14,
     background: "white",
   },
+  tabsBar: {
+    display: "grid",
+    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+    gap: 8,
+    background: "#E2E8F0",
+    padding: 8,
+    borderRadius: 16,
+    marginBottom: 18,
+  },
+  tabButton: {
+    border: "none",
+    borderRadius: 12,
+    padding: "12px 10px",
+    fontWeight: 700,
+    cursor: "pointer",
+    fontSize: 14,
+  },
   kpiGrid: { display: "grid", gridTemplateColumns: "repeat(8, minmax(0, 1fr))", gap: 12, marginBottom: 20 },
   kpiCard: { background: "white", border: "1px solid #E5E7EB", borderRadius: 18, padding: 16, minHeight: 88 },
   kpiLabel: { color: "#64748B", fontSize: 13, marginBottom: 8 },
   kpiValue: { fontSize: 30, fontWeight: 700 },
+  kpiValueSmall: { fontSize: 26, fontWeight: 700 },
+  kpiMini: { background: "#F8FAFC", borderRadius: 14, padding: 16, border: "1px solid #E5E7EB" },
   mainGrid: { display: "grid", gridTemplateColumns: "340px 1fr", gap: 18 },
+  twoColGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 },
   sidebar: { background: "white", border: "1px solid #E5E7EB", borderRadius: 18, padding: 16, height: "fit-content" },
   detailArea: { display: "grid", gap: 18 },
   card: { background: "white", border: "1px solid #E5E7EB", borderRadius: 18, padding: 18 },
@@ -794,4 +975,9 @@ const styles = {
   primaryButton: { background: "#111827", color: "white", border: "none", borderRadius: 12, padding: "10px 14px", fontWeight: 700, cursor: "pointer" },
   secondaryButton: { background: "#E2E8F0", color: "#0F172A", border: "none", borderRadius: 12, padding: "10px 14px", fontWeight: 700, cursor: "pointer" },
   dangerButton: { background: "#DC2626", color: "white", border: "none", borderRadius: 12, padding: "10px 14px", fontWeight: 700, cursor: "pointer" },
+  pipelineGrid: { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 },
+  pipelineCard: { background: "#F8FAFC", border: "1px solid #E5E7EB", borderRadius: 14, padding: 14, textAlign: "center" },
+  table: { width: "100%", borderCollapse: "collapse" },
+  th: { textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #E5E7EB", color: "#64748B", fontSize: 13 },
+  td: { padding: "10px 8px", borderBottom: "1px solid #F1F5F9", verticalAlign: "top" },
 };
