@@ -315,6 +315,16 @@ function WorkflowApp({ user }) {
     emesse: requests.filter((r) => r.stato === "Emessa").length,
   };
 
+const chartData = [
+  { label: "In valutazione", value: stats.inValutazione },
+  { label: "Da integrare", value: stats.daIntegrare },
+  { label: "Approvate", value: stats.approvate },
+  { label: "Quotazioni", value: stats.quotazioni },
+  { label: "Ordini fermi", value: stats.ordineFermo },
+  { label: "Pagate", value: stats.pagate },
+  { label: "Emesse", value: stats.emesse },
+];
+
   async function updateWorkflow(request, patch, auditEntry) {
     const ref = doc(db, "richieste", request.id);
     const nextAudit = [...(request.audit || []), auditEntry];
@@ -409,18 +419,9 @@ function WorkflowApp({ user }) {
           </div>
         </div>
 
-        <div style={styles.kpiGrid}>
-          <KpiCard label="Pratiche totali" value={stats.totali} />
-          <KpiCard label="In valutazione" value={stats.inValutazione} />
-          <KpiCard label="Da integrare" value={stats.daIntegrare} />
-          <KpiCard label="Approvate" value={stats.approvate} />
-          <KpiCard label="Quotazioni" value={stats.quotazioni} />
-          <KpiCard label="Ordini fermi" value={stats.ordineFermo} />
-          <KpiCard label="Pagate" value={stats.pagate} />
-          <KpiCard label="Emesse" value={stats.emesse} />
-        </div>
-
+        
         <div style={styles.tabsBar}>
+	  <TabButton label="Dashboard" active={activeTab === "dashboard"} onClick={() => setActiveTab("dashboard")} />
           <TabButton label="Workflow operativo" active={activeTab === "workflow"} onClick={() => setActiveTab("workflow")} />
           <TabButton label="Nuova richiesta" active={activeTab === "nuova"} onClick={() => setActiveTab("nuova")} />
           <TabButton label="Workflow completo" active={activeTab === "completo"} onClick={() => setActiveTab("completo")} />
@@ -428,6 +429,102 @@ function WorkflowApp({ user }) {
           <TabButton label="Regole MVP" active={activeTab === "regole"} onClick={() => setActiveTab("regole")} />
         </div>
 
+{activeTab === "dashboard" && (
+  <div style={styles.dashboardGrid}>
+    <div style={styles.card}>
+      <div style={styles.cardTitle}>Dashboard</div>
+      <div style={styles.kpiGridDashboard}>
+        <KpiCard label="Pratiche totali" value={stats.totali} />
+        <KpiCard label="In valutazione" value={stats.inValutazione} />
+        <KpiCard label="Da integrare" value={stats.daIntegrare} />
+        <KpiCard label="Approvate" value={stats.approvate} />
+        <KpiCard label="Quotazioni" value={stats.quotazioni} />
+        <KpiCard label="Ordini fermi" value={stats.ordineFermo} />
+        <KpiCard label="Pagate" value={stats.pagate} />
+        <KpiCard label="Emesse" value={stats.emesse} />
+      </div>
+<div style={{ marginTop: 20 }}>
+    <div style={styles.cardTitle}>Ultime pratiche</div>
+
+    <div style={{ display: "grid", gap: 10 }}>
+      {requests.slice(0, 5).map((item) => (
+        <div key={item.id} style={styles.latestItem}>
+          <div>
+            <div style={{ fontWeight: 700 }}>{item.cliente}</div>
+            <div style={styles.mutedSmall}>
+              {item.prodotto} · {item.specialista}
+            </div>
+          </div>
+
+          <div style={{ textAlign: "right" }}>
+            <StatusBadge value={item.stato} />
+            <div style={{ ...styles.mutedSmall, marginTop: 6 }}>
+              {item.fase || "—"}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</div>
+    
+    <div style={styles.card}>
+      <div style={styles.cardTitle}>Sintesi operativa</div>
+      <div style={{ display: "grid", gap: 12 }}>
+        <div style={styles.kpiMini}>
+          <div style={styles.kpiLabel}>Backlog operativo</div>
+          <div style={styles.kpiValueSmall}>
+            {stats.inValutazione + stats.approvate + stats.quotazioni + stats.pagate}
+          </div>
+        </div>
+
+
+<div style={styles.card}>
+  <div style={styles.cardTitle}>Stato pratiche</div>
+
+  <div style={{ display: "grid", gap: 12 }}>
+    {chartData.map((item) => {
+      const maxValue = Math.max(...chartData.map((d) => d.value), 1);
+      const widthPercent = (item.value / maxValue) * 100;
+
+      return (
+        <div key={item.label} style={styles.chartRow}>
+          <div style={styles.chartLabel}>{item.label}</div>
+
+          <div style={styles.chartBarWrap}>
+            <div
+              style={{
+                ...styles.chartBar,
+                width: `${widthPercent}%`,
+              }}
+            />
+          </div>
+
+          <div style={styles.chartValue}>{item.value}</div>
+        </div>
+      );
+    })}
+  </div>
+</div>
+
+        <div style={styles.kpiMini}>
+          <div style={styles.kpiLabel}>Pratiche bloccate</div>
+          <div style={styles.kpiValueSmall}>
+            {stats.daIntegrare + stats.ordineFermo}
+          </div>
+        </div>
+
+        <div style={styles.kpiMini}>
+          <div style={styles.kpiLabel}>Tasso emissione</div>
+          <div style={styles.kpiValueSmall}>
+            {stats.totali ? Math.round((stats.emesse / stats.totali) * 100) : 0}%
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+        
         {activeTab === "workflow" && (
           <div style={styles.mainGrid}>
             <div style={styles.sidebar}>
@@ -912,13 +1009,15 @@ const styles = {
     background: "white",
   },
   tabsBar: {
-    display: "grid",
-    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
-    gap: 8,
+    display: "flex",
+    gap: "10px",
     background: "#E2E8F0",
     padding: 8,
     borderRadius: 16,
     marginBottom: 18,
+    flexWrap: "nowrap",
+    overflowX: "auto",
+    whiteSpace: "nowrap",
   },
   tabButton: {
     border: "none",
@@ -928,6 +1027,62 @@ const styles = {
     cursor: "pointer",
     fontSize: 14,
   },
+
+latestItem: {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 16,
+  padding: 14,
+  border: "1px solid #E5E7EB",
+  borderRadius: 14,
+  background: "#FFFFFF",
+},
+
+chartRow: {
+  display: "grid",
+  gridTemplateColumns: "160px 1fr 40px",
+  gap: 12,
+  alignItems: "center",
+},
+
+chartLabel: {
+  fontSize: 14,
+  color: "#334155",
+  fontWeight: 600,
+},
+
+chartBarWrap: {
+  width: "100%",
+  height: 14,
+  background: "#E2E8F0",
+  borderRadius: 999,
+  overflow: "hidden",
+},
+
+chartBar: {
+  height: "100%",
+  background: "#0F172A",
+  borderRadius: 999,
+},
+
+chartValue: {
+  fontSize: 14,
+  fontWeight: 700,
+  color: "#0F172A",
+  textAlign: "right",
+},
+dashboardGrid: {
+  display: "grid",
+  gridTemplateColumns: "2fr 1fr",
+  gap: 18,
+},
+
+kpiGridDashboard: {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gap: 12,
+},
   kpiGrid: { display: "grid", gridTemplateColumns: "repeat(8, minmax(0, 1fr))", gap: 12, marginBottom: 20 },
   kpiCard: { background: "white", border: "1px solid #E5E7EB", borderRadius: 18, padding: 16, minHeight: 88 },
   kpiLabel: { color: "#64748B", fontSize: 13, marginBottom: 8 },
