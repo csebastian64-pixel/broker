@@ -240,6 +240,11 @@ function WorkflowApp({ user }) {
   const [loading, setLoading] = useState(true);
   const [saveMessage, setSaveMessage] = useState("");
   const [activeTab, setActiveTab] = useState("workflow");
+  const [quotazioneFile, setQuotazioneFile] = useState(null);
+  const [numeroPolizza, setNumeroPolizza] = useState("");
+  const [premioTotale, setPremioTotale] = useState("");
+  const [dataEffetto, setDataEffetto] = useState("");
+  const [contraenteQuotazione, setContraenteQuotazione] = useState("");
   const [form, setForm] = useState({
     cliente: "",
     tipoCliente: "Persona giuridica",
@@ -393,6 +398,128 @@ const chartData = [
     });
     setTimeout(() => setSaveMessage(""), 2500);
   }
+
+async function salvaQuotazione(request) {
+  await updateWorkflow(
+    request,
+    {
+      stato: "Quotazione ricevuta",
+      fase: "Attesa accettazione preventivo",
+      quotazioneRicevuta: true,
+      numeroPolizza: numeroPolizza || "",
+      premioTotale: premioTotale || "",
+      dataEffettoPolizza: dataEffetto || "",
+      nomeFileQuotazione: quotazioneFile ? quotazioneFile.name : "",
+    },
+    {
+      data: new Date().toLocaleString("it-IT"),
+      utente: role,
+      azione: "Quotazione caricata",
+      dettaglio: `File: ${quotazioneFile ? quotazioneFile.name : "nessun file"} - Polizza: ${numeroPolizza || "-"}`,
+    }
+  );
+
+  setQuotazioneFile(null);
+  setNumeroPolizza("");
+  setPremioTotale("");
+  setDataEffetto("");
+}
+
+function parseQuotazioneText(text) {
+  const cleanText = text.replace(/\s+/g, " ").trim();
+
+  const numeroPolizzaMatch =
+    cleanText.match(/Polizza\s*n\.\s*([0-9.]+)/i) ||
+    cleanText.match(/Numero\s+([0-9.]+)/i);
+
+  const contraenteMatch =
+    cleanText.match(/Contraente\s+([A-ZÀ-Ú\s'.-]+?)\s+Codice fiscale/i) ||
+    cleanText.match(/Ragione\s+Sociale\s+([A-Z0-9\s'.&-]+?)\s+Partita\s+Iva/i);
+
+  const premioTotaleMatch =
+    cleanText.match(/Totale\s+€\s*([\d.,]+)(?:\s+all'anno)?/i) ||
+    cleanText.match(/Attiva\s+Totale\s+€\s*([\d.,]+)/i) ||
+    cleanText.match(/PREMIO\s+ALLA\s+FIRMA.*?Totale\s+€\s*([\d.,]+)/i);
+
+  const dataEffettoMatch =
+    cleanText.match(/decorre\s+dalle\s+ore\s+\d{1,2}\s+del\s+(\d{2}\/\d{2}\/\d{4})/i) ||
+    cleanText.match(/Effetto\s+Ore\s+\d{1,2}:\d{2}\s+del\s+(\d{2}\/\d{2}\/\d{4})/i);
+
+  return {
+    numeroPolizza: numeroPolizzaMatch ? numeroPolizzaMatch[1].trim() : "",
+    contraente: contraenteMatch ? contraenteMatch[1].trim() : "",
+    premioTotale: premioTotaleMatch ? premioTotaleMatch[1].trim() : "",
+    dataEffetto: dataEffettoMatch ? convertItalianDateToInput(dataEffettoMatch[1]) : "",
+  };
+}
+
+async function extractTextFromPdf(file) {
+  const pdfjsLib = await import("pdfjs-dist");
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/build/pdf.worker.min.mjs",
+    import.meta.url
+  ).toString();
+
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+  let fullText = "";
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items.map((item) => item.str).join(" ");
+    fullText += " " + pageText;
+  }
+
+  return fullText;
+}
+
+async function handleQuotazioneFileChange(file) {
+  setQuotazioneFile(file);
+
+  if (!file) return;
+
+  try {
+    const text = await extractTextFromPdf(file);
+    console.log("TESTO PDF:", text);
+  
+    const parsed = parseQuotazioneText(text);
+    console.log("PARSED PDF:", parsed);
+  
+
+    if (parsed.numeroPolizza) setNumeroPolizza(parsed.numeroPolizza);
+    if (parsed.contraente) setContraenteQuotazione(parsed.contraente);
+    if (parsed.premioTotale) setPremioTotale(parsed.premioTotale);
+    if (parsed.dataEffetto) setDataEffetto(parsed.dataEffetto);
+  } catch (error) {
+    console.error("Errore parsing PDF:", error);
+    alert("Non sono riuscito a leggere automaticamente il PDF. Puoi comunque compilare i campi a mano.");
+  }
+}
+
+function convertItalianDateToInput(dateStr) {
+  const [day, month, year] = dateStr.split("/");
+  return `${year}-${month}-${day}`;
+}
+function applicaParsingDemo() {
+  const sampleText = `
+    Numero 617.047.0000901101
+    CONTRAENTE
+    Ragione Sociale SCAINT SRL
+    Partita Iva 02130561000
+    Effetto Ore 24:00 del 23/11/2025
+    PREMIO ALLA FIRMA
+    Imponibile € 322,27 Imposte € 71,73 Totale € 394,00
+  `;
+
+  const parsed = parseQuotazioneText(sampleText);
+
+  setNumeroPolizza(parsed.numeroPolizza);
+  setContraenteQuotazione(parsed.contraente);
+  setPremioTotale(parsed.premioTotale);
+  setDataEffetto(parsed.dataEffetto);
+}
 
   return (
     <div style={styles.page}>
@@ -596,7 +723,29 @@ const chartData = [
 
                     <Section title="Bisogni del cliente">{selected.needs || "—"}</Section>
                     <Section title="Note operative">{selected.note || "—"}</Section>
+{selected.quotazioneRicevuta && (
+  <div style={styles.card}>
+    <div style={styles.cardTitle}>Quotazione</div>
 
+    <div style={{ display: "grid", gap: 8 }}>
+      <div>
+        <b>Numero polizza:</b> {selected.numeroPolizza || "-"}
+      </div>
+
+      <div>
+        <b>Premio totale:</b> {selected.premioTotale || "-"}
+      </div>
+
+      <div>
+        <b>Data effetto:</b> {selected.dataEffettoPolizza || "-"}
+      </div>
+
+      <div>
+        <b>File:</b> {selected.nomeFileQuotazione || "-"}
+      </div>
+    </div>
+  </div>
+)}	
                     <Section title="Workflow">
                       <div style={styles.timeline}>
                         {getTimeline(selected).map((item) => (
@@ -710,18 +859,51 @@ const chartData = [
                             Invia al Broker
                           </button>
 
-                          <button
-                            style={styles.secondaryButton}
-                            onClick={() =>
-                              updateWorkflow(
-                                selected,
-                                { stato: "Quotazione ricevuta", fase: "Attesa accettazione preventivo", privacyBroker: true, quotazioneRicevuta: true },
-                                { data: new Date().toLocaleString("it-IT"), utente: selected.broker, azione: "Quotazione ricevuta", dettaglio: comment || "Quotazione registrata" }
-                              )
-                            }
-                          >
-                            Registra quotazione
-                          </button>
+<div style={styles.uploadBox}>
+  <div style={styles.label}>Carica preventivo / quotazione</div>
+
+  <input
+    type="file"
+    accept="application/pdf"
+    onChange={(e) => handleQuotazioneFileChange(e.target.files?.[0] || null)}
+  />
+
+  <input
+    style={styles.input}
+    placeholder="Numero polizza"
+    value={numeroPolizza}
+    onChange={(e) => setNumeroPolizza(e.target.value)}
+  />
+
+<input
+  style={styles.input}
+  placeholder="Contraente"
+  value={contraenteQuotazione}
+  onChange={(e) => setContraenteQuotazione(e.target.value)}
+/>
+
+  <input
+    style={styles.input}
+    placeholder="Premio totale"
+    value={premioTotale}
+    onChange={(e) => setPremioTotale(e.target.value)}
+  />
+
+  <input
+    style={styles.input}
+    type="date"
+    value={dataEffetto}
+    onChange={(e) => setDataEffetto(e.target.value)}
+  />
+
+  <button
+    style={styles.secondaryButton}
+    onClick={() => salvaQuotazione(selected)}
+  >
+    Salva quotazione
+  </button>
+</div>
+                         
                         </>
                       )}
 
@@ -1027,6 +1209,16 @@ const styles = {
     cursor: "pointer",
     fontSize: 14,
   },
+
+uploadBox: {
+  display: "grid",
+  gap: 10,
+  marginTop: 10,
+  padding: 12,
+  border: "1px solid #E5E7EB",
+  borderRadius: 12,
+  background: "#F8FAFC",
+},
 
 latestItem: {
   display: "flex",
