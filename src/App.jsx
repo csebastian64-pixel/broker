@@ -18,6 +18,7 @@ import {
   onAuthStateChanged,
   signOut,
 } from "firebase/auth";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAI3mikHgVMO4DM89lTvn7RsaSzO6w94l4",
@@ -31,6 +32,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+const storage = getStorage(app);
 
 const roles = ["Specialista", "Valutatore", "Bancassurance", "Operations", "Amministratore"];
 const states = [
@@ -245,6 +247,7 @@ function WorkflowApp({ user }) {
   const [premioTotale, setPremioTotale] = useState("");
   const [dataEffetto, setDataEffetto] = useState("");
   const [contraenteQuotazione, setContraenteQuotazione] = useState("");
+  const [urlFileQuotazione, setUrlFileQuotazione] = useState("");
   const [form, setForm] = useState({
     cliente: "",
     tipoCliente: "Persona giuridica",
@@ -400,6 +403,18 @@ const chartData = [
   }
 
 async function salvaQuotazione(request) {
+  let downloadUrl = "";
+  let nomeFile = "";
+
+  if (quotazioneFile) {
+    nomeFile = quotazioneFile.name;
+    const safeName = `${Date.now()}_${quotazioneFile.name}`;
+    const fileRef = storageRef(storage, `quotazioni/${request.id}/${safeName}`);
+
+    await uploadBytes(fileRef, quotazioneFile);
+    downloadUrl = await getDownloadURL(fileRef);
+  }
+
   await updateWorkflow(
     request,
     {
@@ -407,20 +422,24 @@ async function salvaQuotazione(request) {
       fase: "Attesa accettazione preventivo",
       quotazioneRicevuta: true,
       numeroPolizza: numeroPolizza || "",
+      contraenteQuotazione: contraenteQuotazione || "",
       premioTotale: premioTotale || "",
       dataEffettoPolizza: dataEffetto || "",
-      nomeFileQuotazione: quotazioneFile ? quotazioneFile.name : "",
+      nomeFileQuotazione: nomeFile || "",
+      urlFileQuotazione: downloadUrl || "",
     },
     {
       data: new Date().toLocaleString("it-IT"),
       utente: role,
       azione: "Quotazione caricata",
-      dettaglio: `File: ${quotazioneFile ? quotazioneFile.name : "nessun file"} - Polizza: ${numeroPolizza || "-"}`,
+      dettaglio: `File: ${nomeFile || "nessun file"} - Polizza: ${numeroPolizza || "-"}`,
     }
   );
 
   setQuotazioneFile(null);
+  setUrlFileQuotazione("");
   setNumeroPolizza("");
+  setContraenteQuotazione("");
   setPremioTotale("");
   setDataEffetto("");
 }
@@ -477,8 +496,12 @@ async function extractTextFromPdf(file) {
 
 async function handleQuotazioneFileChange(file) {
   setQuotazioneFile(file);
+  if (!file) {
+     setUrlFileQuotazione("");
+     return;
+   }
 
-  if (!file) return;
+  setUrlFileQuotazione(URL.createObjectURL(file));
 
   try {
     const text = await extractTextFromPdf(file);
@@ -741,7 +764,18 @@ function applicaParsingDemo() {
       </div>
 
       <div>
-        <b>File:</b> {selected.nomeFileQuotazione || "-"}
+         <b>File:</b>{" "}
+        {selected.urlFileQuotazione ? (
+          <a
+            href={selected.urlFileQuotazione}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {selected.nomeFileQuotazione || "Apri file"}
+          </a>
+        ) : (
+          selected.nomeFileQuotazione || "-"
+        )}
       </div>
     </div>
   </div>
