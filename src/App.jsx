@@ -597,14 +597,22 @@ function applicaParsingDemo() {
     <div style={styles.cardTitle}>Ultime pratiche</div>
 
     <div style={{ display: "grid", gap: 10 }}>
-      {requests.slice(0, 5).map((item) => (
-        <div key={item.id} style={styles.latestItem}>
-          <div>
-            <div style={{ fontWeight: 700 }}>{item.cliente}</div>
-            <div style={styles.mutedSmall}>
-              {item.prodotto} · {item.specialista}
-            </div>
+     {requests.slice(0, 5).map((item) => (
+       <button
+         key={item.id}
+         type="button"
+         style={styles.latestItem}
+         onClick={() => {
+           setSelectedId(item.id);
+           setActiveTab("workflow");
+         }}
+       >
+   	 <div>
+          <div style={{ fontWeight: 700 }}>{item.cliente}</div>
+          <div style={styles.mutedSmall}>
+            {item.prodotto} · {item.specialista}
           </div>
+        </div>
 
           <div style={{ textAlign: "right" }}>
             <StatusBadge value={item.stato} />
@@ -612,7 +620,7 @@ function applicaParsingDemo() {
               {item.fase || "—"}
             </div>
           </div>
-        </div>
+        </button>
       ))}
     </div>
   </div>
@@ -1263,6 +1271,9 @@ latestItem: {
   border: "1px solid #E5E7EB",
   borderRadius: 14,
   background: "#FFFFFF",
+  width: "100%",
+  textAlign: "left",
+  cursor: "pointer",
 },
 
 chartRow: {
